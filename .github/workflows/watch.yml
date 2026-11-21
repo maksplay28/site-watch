@@ -4,7 +4,8 @@
 name: watch
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    # Off the round minutes: GitHub is busiest at the top of the hour and skips runs there.
+    - cron: "3-58/5 * * * *"
   workflow_dispatch:
     inputs:
       announce:
