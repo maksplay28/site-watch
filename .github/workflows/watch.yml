@@ -1,0 +1,55 @@
+# Opens the shop every few minutes from outside its hosting and writes to a Telegram chat when
+# something is wrong (watch.mjs). GitHub starts scheduled runs when it has room:
+# "every 5 minutes" is in practice every 5–15.
+name: watch
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      announce:
+        description: "Send the one-off «the watcher is on» message"
+        type: boolean
+        default: false
+      selfcheck:
+        description: "Ask Telegram whether the chat can be written to (nothing is sent)"
+        type: boolean
+        default: true
+# Only the schedule and a manual start: nothing a stranger's fork or pull request can trigger,
+# so the secrets are never within reach of code that is not in this repository.
+permissions:
+  contents: write
+concurrency:
+  group: watch
+  cancel-in-progress: false
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: look at the shop
+        run: node watch.mjs
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          SITE_COOKIE: ${{ secrets.SITE_COOKIE }}
+          HOSTING_PROJECT: ${{ secrets.HOSTING_PROJECT }}
+          DOMAIN_REGISTRAR: ${{ secrets.DOMAIN_REGISTRAR }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BILLING_DAY: "21"
+          BILLING_AMOUNT: "20 $"
+          ANNOUNCE: ${{ inputs.announce && '1' || '' }}
+          SELF_CHECK: ${{ inputs.selfcheck && '1' || '' }}
+      # What the watcher remembers between runs (is the site down, since when, what has been
+      # said). It changes on an incident and once a day — and a daily commit is also what keeps
+      # GitHub from switching off the schedule of a repository nobody touches for 60 days.
+      - name: remember
+        run: |
+          if [ -n "$(git status --porcelain state.json)" ]; then
+            git config user.name "site-watch"
+            git config user.email "site-watch@users.noreply.github.com"
+            git add state.json
+            git commit -q -m "state"
+            git push -q
+          fi
